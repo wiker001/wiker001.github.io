@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <!-- import CSS -->
+    <link rel="stylesheet" href="css/theme-chalk.index.css">
+</head>
+<!-- import Vue before Element -->
+<script src="lib/vue.js"></script>
+<!-- import JavaScript -->
+<script src="lib/element-ui.2.3.9.index.js"></script>
+<script src=lib/nebPay.js></script>
+<script src=lib/nebulas.js></script>
+<body class="body-css">
+<div id="app">
+    <el-row :gutter="20">
+        <el-col :span="3">
+            <div class="grid-content right-button-bg">{{topDesc}}</div>
+        </el-col>
+        <el-col :span="2">
+            <div class="grid-content"></div>
+        </el-col>
+        <el-col :span="6">
+            <div class="grid-content top-desc-bg">{{deskDesc}}</div>
+        </el-col>
+        <el-col :span="3">
+            <div class="grid-content"></div>
+        </el-col>
+        <el-col :span="2">
+            <div class="grid-content">
+                <el-button type="text" @click="createDialog = true" class="right-button-bg">创建牌局</el-button>
+            </div>
+        </el-col>
+        <el-col :span="2">
+            <div class="grid-content">
+                <el-button type="text" @click="toCurrentSpace" class="right-button-bg">当前牌局</el-button>
+            </div>
+        </el-col>
+        <el-col :span="2">
+            <div class="grid-content ">
+                <el-button type="text" @click="toHistorySpace" class="right-button-bg">历史牌局</el-button>
+            </div>
+        </el-col>
+        <el-col :span="2">
+            <div class="grid-content ">
+                <el-button type="text" @click="helpRuleDialog = true" class="right-button-bg">规则</el-button>
+            </div>
+        </el-col>
+        <el-col :span="2">
+            <div class="grid-content "></div>
+        </el-col>
+    </el-row>
+
+    <el-row v-if="deskLine1" :gutter="10">
+        <el-col :span="3" v-for="(o, index) in currentDeskFList" :key="index" :offset="1"
+                style="margin-bottom: 10px;margin-right: 10px;margin-top: 20px;">
+            <el-card :body-style="{ padding: '0px'}" v-if="o.index!=-1">
+                <img src="img/zjh/desk.jpg" class="image">
+                <span>{{o.slogan}}</span>
+                <el-row style="margin-bottom: 5px;margin-top: 1px;margin-left: 10px;">
+                    <el-col :span="12"><span class="time">no:{{o.index}}</span></el-col>
+                    <el-col :span="12"><span class="time">{{o.playList.length}}/{{o.playCount}}人桌</span></el-col>
+                </el-row>
+                <el-row style="margin-right: 1px;margin-top: 1px;margin-left: 10px;">
+                    <el-col :span="12"><span class="time">{{o.nickName}}</span></el-col>
+                    <el-col :span="12"><span class="time">{{o.deskUnits}}nas</span></el-col>
+                </el-row>
+                <el-row>
+                    <el-col :span="20">
+                        <time class="time">{{ o.createTime }}</time>
+                    </el-col>
+                    <el-col :span="1"></el-col>
+                    <el-col :span="2">
+                        <el-button type="text" @click="viewDesk(o.index)" class="button">join</el-button>
+                    </el-col>
+                    <el-col :span="1"></el-col>
+                </el-row>
+            </el-card>
+        </el-col>
+        <el-col :span="2" style="margin-left: 20px;margin-top: 200px;">
+            <img src="img/zjh/btn_up.png" class="btn-image">
+        </el-col>
+    </el-row>
+    <el-row v-if="deskLine2" :gutter="10" >
+        <el-col :span="3" v-for="(o, index) in currentDeskBList" :key="index" :offset="1"
+                style="margin-bottom: 10px;margin-right: 10px;">
+            <el-card :body-style="{ padding: '0px'}" v-if="o.index!=-1">
+                <img src="img/zjh/desk.jpg" class="image">
+                <span style="margin-bottom: 5px;margin-top: 1px;margin-left: 10px;">{{o.slogan}}</span>
+                <el-row style="margin-bottom: 5px;margin-top: 1px;margin-left: 10px;">
+                    <el-col :span="12"><span class="time">no:{{o.index}}</span></el-col>
+                    <el-col :span="12"><span class="time">{{o.playList.length}}/{{o.playCount}}人桌</span></el-col>
+                </el-row>
+                <el-row style="margin-right: 1px;margin-top: 1px;margin-left: 10px;">
+                    <el-col :span="12"><span class="time">{{o.nickName}}</span></el-col>
+                    <el-col :span="12"><span class="time">{{o.deskUnits}}nas</span></el-col>
+                </el-row>
+                <el-row style="margin-right: 1px;margin-top: 1px;">
+                    <el-col :span="20">
+                        <time class="time">{{ o.createTime }}</time>
+                    </el-col>
+                    <el-col :span="1"></el-col>
+                    <el-col :span="2">
+                        <el-button type="text" @click="viewDesk(o.index)" class="button">join</el-button>
+                    </el-col>
+                    <el-col :span="1"></el-col>
+                </el-row>
+            </el-card>
+        </el-col>
+        <el-col :span="2" style="margin-left: 20px;margin-top: 20px;">
+            <img src="img/zjh/btn_down.png" class="btn-image">
+        </el-col>
+    </el-row>
+
+    <el-row v-if="deskLine3" :gutter="10">
+        <el-col :span="3" v-for="(o, index) in currentPlayFList" :key="index" :offset="1"
+                style="margin-bottom: 10px;margin-right: 10px;margin-top: 20px;">
+            <el-card :body-style="{ padding: '0px'}" v-if="o.winStatus!=-1">
+                <img  :src="o.pokerList[0]" class="image-n">
+                <img  :src="o.pokerList[1]" class="image-n">
+                <img  :src="o.pokerList[2]" class="image-n">
+                <div style="padding: 14px;">
+                    <span>{{ o.nickName }}</span>
+                    <span v-if="o.winStatus==0" style="color: red">待开牌</span>
+                    <span v-if="o.winStatus!=0" style="color: red">已开牌,赢得{{o.winFee}}</span>
+                    <div class="bottom clearfix">
+                        <time class="time">{{ o.createTime }}</time>
+                    </div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="2" style="margin-left: 20px;margin-top: 150px;">
+            <img src="img/zjh/ui_tijiao.png" @click="joinDialog = true" class="btn-image">
+        </el-col>
+
+    </el-row>
+    <el-row v-if="deskLine4" :gutter="10">
+        <el-col :span="3" v-for="(o, index) in currentPlayBList" :key="index" :offset="1"
+                style="margin-bottom: 10px;margin-right: 10px;margin-top: 20px;">
+            <el-card :body-style="{ padding: '0px'}" v-if="o.winStatus!=-1">
+                <img  :src="o.pokerList[0]" class="image-n">
+                <img  :src="o.pokerList[1]" class="image-n">
+                <img  :src="o.pokerList[2]" class="image-n">
+                <div style="padding: 14px;">
+                    <span>{{ o.nickName }}</span>
+                    <span v-if="o.winStatus==0" style="color: red">待开牌</span>
+                    <span v-if="o.winStatus!=0" style="color: red">已开牌,赢得{{o.winFee}}</span>
+                    <div class="bottom clearfix">
+                        <time class="time">{{ o.createTime }}</time>
+                    </div>
+                </div>
+            </el-card>
+        </el-col>
+        <el-col :span="2" style="margin-left: 20px;margin-top: 20px;">
+            <img src="img/zjh/ui_quxiao.png" class="btn-image">
+        </el-col>
+    </el-row>
+
+
+    <el-dialog
+            title="创建牌局"
+            :visible.sync="createDialog"
+            :close-on-click-modal="false"
+            custom-class="dialog-bg"
+            width="30%">
+        <el-form ref="createDeskForm" :model="createDeskForm" label-width="110px">
+            <el-form-item label="您的昵称: ">
+                <el-input v-model="createDeskForm.nickName"></el-input>
+            </el-form-item>
+            <el-form-item label="牌局底价(NAS): ">
+                <el-radio-group v-model="createDeskForm.unitPrice">
+                    <el-radio label="0.001"></el-radio>
+                    <el-radio label="0.01"></el-radio>
+                    <el-radio label="0.1"></el-radio>
+                    <el-radio label="1"></el-radio>
+                </el-radio-group>
+            </el-form-item>
+            <el-form-item label="人数设置: ">
+                <el-input-number v-model="createDeskForm.playCount" size="mini" :min="2" :max="10"
+                                 label="人"></el-input-number>
+            </el-form-item>
+            <el-form-item label="牌局口号: ">
+                <el-input v-model="createDeskForm.slogan" max="20" min="5" type="textarea"
+                          :rows="2" placeholder="欢迎来挑战~"></el-input>
+            </el-form-item>
+        </el-form>
+        <el-button type="info" @click="createDesk">立刻创建</el-button>
+    </el-dialog>
+
+
+    <el-dialog
+            title="参与牌局"
+            :visible.sync="joinDialog"
+            :close-on-click-modal="false"
+            custom-class="dialog-bg"
+            width="30%">
+        <el-form ref="joinDeskForm" :model="joinDeskForm" label-width="50px">
+            <el-form-item label="">
+                <span class="top-desc-bg">{{joinButtonDesc}}</span>
+            </el-form-item>
+            <el-form-item label="昵称: ">
+                <el-input v-model="joinDeskForm.nickName"></el-input>
+            </el-form-item>
+        </el-form>
+        <el-button type="info" @click="joinDesk">提 交</el-button>
+    </el-dialog>
+
+    <el-dialog
+            title="提示"
+            :visible.sync="ruleDialogVisible"
+            :close-on-click-modal="false"
+            custom-class="dialog-bg"
+            width="30%"
+            center>
+        <span>需要注意的是内容是默认不居中的</span>
+        <span slot="footer" class="dialog-footer">
+    <el-button @click="centerDialogVisible = false">取 消</el-button>
+    <el-button type="primary" @click="centerDialogVisible = false">确 定</el-button>
+        </span>
+    </el-dialog>
+</div>
+</body>
+
+<script src="lib/zjh/zjh.js"></script>
+<style>
+    .h1 {
+        font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    }
+
+    .body-css {
+        background: url(img/zjh/bj.jpg);
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-size: 100% 100%;
+        font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    }
+
+    .dialog-bg {
+        background: url(img/zjh/dialog_bg.png);
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-size: 100% 100%;
+        font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    }
+
+    .loading-bg {
+        background: url(img/zjh/loading.png);
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-size: 100% 100%;
+        text-align: center;
+        font-size: 40px;
+        color: #FFF0F5;
+        font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    }
+
+    .el-row {
+        margin-bottom: 10px;
+
+    &
+    :last-child {
+        margin-bottom: 0;
+    }
+
+    }
+    .el-col {
+        border-radius: 4px;
+    }
+
+    .bg-purple-dark {
+
+    }
+
+    .dialog-rule {
+
+    }
+
+    .right-button-bg {
+        text-align: center;
+        line-height: 50px;
+        min-height: 50px;
+        font-size: 24px;
+        color: #FFF0F5;
+    }
+
+    .top-desc-bg {
+        text-align: center;
+        line-height: 50px;
+        min-height: 50px;
+        font-size: 18px;
+        color: red;
+    }
+
+    .bg-purple-light {
+        background: #e5e9f2;
+    }
+
+    .grid-content {
+        margin-top: 10px;
+        border-radius: 4px;
+    }
+
+    .row-bg {
+        padding: 10px 0;
+        background-color: #f9fafc;
+    }
+
+    .time {
+        font-size: 13px;
+        color: #999;
+    }
+
+    .bottom {
+        margin-top: 13px;
+        line-height: 12px;
+    }
+
+    .button {
+        padding: 0;
+        float: right;
+    }
+
+    .image {
+        width: 100%;
+        height: 150px;
+        display: block;
+    }
+
+    .image-n {
+        width: 30%;
+        height: 100px;
+    }
+
+    .btn-image {
+        width: 57px;
+        height: 57px;
+        display: block;
+        cursor: pointer;
+    }
+
+    .clearfix:before,
+    .clearfix:after {
+        display: table;
+        content: "";
+    }
+
+    .clearfix:after {
+        clear: both
+    }
+</style>
+</html>
