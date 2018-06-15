@@ -1,7 +1,7 @@
 "use strict";
 
 var nasToWei = new BigNumber(10).pow(new BigNumber(18));
-var initPokerList = [["heart","hide"],["heart","hide"],["heart","hide"]];
+var initPokerList = [["heart", "hide"], ["heart", "hide"], ["heart", "hide"]];
 
 var PlayItem = function (text) {
     if (text) {
@@ -64,8 +64,9 @@ var ZJHContract = function () {
     LocalContractStorage.defineProperties(this, {
         owner: null,
         fee: null,
-        size: null, // 竞猜项目总数
-        historySize: null // 已结束项目数
+        size: null, // 总桌数
+        historySize: null, // 已结束桌数
+        currentSize: null
     });
 
     LocalContractStorage.defineMapProperty(this, "allDeskMap", {
@@ -79,7 +80,7 @@ var ZJHContract = function () {
 
     LocalContractStorage.defineMapProperties(this, {
         historyIndexMap: null, // index: Index (index => beRewardSize)
-        historyDeskKeys: null, // Index: true (Index => size)
+        currentIndexMap: null, // Index: true (Index => size)
         nickNameMap: null
     });
 };
@@ -87,9 +88,10 @@ var ZJHContract = function () {
 ZJHContract.prototype = {
     init: function () {
         this.owner = Blockchain.transaction.from;
-        this.fee = new BigNumber(0.001);
+        this.feePercent = new BigNumber(0.001); //千分之一旷工费
         this.size = 0;
         this.historySize = 0;
+        this.currentSize = 0;
     },
     // 发起牌局 下注单位 玩家人数 口号
     createDesk: function (deskUnits, playCount, slogan, nickName, createTime) {
@@ -111,21 +113,23 @@ ZJHContract.prototype = {
         deskItem.slogan = slogan;
         var playItem = new PlayItem();
         playItem.userAddress = from;
-        playItem.pokerList= initPokerList;
+        playItem.pokerList = initPokerList;
         playItem.winStatus = 0;
         playItem.nickName = nickName;
-        playItem.createTime =createTime;
+        playItem.createTime = createTime;
 
         deskItem.playList = [playItem];
         deskItem.nickName = nickName;
         deskItem.createTime = createTime;
         this.nickNameMap.set(from, nickName);
         this.allDeskMap.set(this.size, deskItem);
+        this.currentIndexMap.set(this.currentSize, this.size);
         this.size += 1;
+        this.currentSize += 1;
     },
 
     // 参与
-    joinDesk: function (deskIndex,nickName,createTime) {
+    joinDesk: function (deskIndex, nickName, createTime) {
         var from = Blockchain.transaction.from;
         var value = new BigNumber(Blockchain.transaction.value);
         deskIndex = new BigNumber(deskIndex);
@@ -135,11 +139,11 @@ ZJHContract.prototype = {
         var deskUnits = new BigNumber(deskItem.deskUnits);
         var deskUnitsWei = deskUnits.times(nasToWei)
         if (!value.eq(deskUnitsWei)) {
-            throw new Error("Please pay " + deskUnits.div(nasToWei) + "NAS.");
+            throw new Error("Please pay " + deskUnits + "NAS.");
         }
         var playItem = new PlayItem();
         playItem.userAddress = from;
-        playItem.pokerList= initPokerList;
+        playItem.pokerList = initPokerList;
         playItem.winStatus = 0;
         playItem.nickName = nickName;
         playItem.createTime = createTime;
@@ -151,11 +155,13 @@ ZJHContract.prototype = {
             playList = this._dealPoker(playList);
             //开奖
             var winnerPlay = this._openPoker(playList);
-            var winFee = deskUnits.times(deskItem.playCount);
+            var winFee = deskUnitsWei.times(deskItem.playCount);
+            var minusFee = new BigNumber(1).minus(new BigNumber(this.feePercent)); // 减去手续费后剩余比例
+            winFee = winFee.times(minusFee);
             // 支付奖金
-            var result = Blockchain.transfer(winnerPlay.userAddress, winFee);
+            var result = Blockchain.transfer(winnerPlay.userAddress,);
             if (!result) {
-                throw new Error("transfer failed.");
+                throw new Error("transfer failed." + winFee);
             }
             Event.Trigger("ZJHContract", {
                 Transfer: {
@@ -165,52 +171,82 @@ ZJHContract.prototype = {
                 }
             });
             var historyIndex = this.historySize;
+            this._resetCurrentIndexMap(deskIndex);
             this.historyIndexMap.set(historyIndex, deskItem.index);
-            this.historyDeskKeys.set(deskItem.index, true);
             this.nickNameMap.set(from, nickName);
             for (var i = 0; i < playList.length; i++) {
                 if (playList[i].userAddress == winnerPlay.userAddress) {
                     playList[i].winFee = winFee;
                     playList[i].winStatus = 1;
-                }else
-                {
+                } else {
                     playList[i].winFee = 0;
                     playList[i].winStatus = 2;
                 }
             }
             deskItem.playList = playList;
+            this.historySize += 1;
+            this.currentSize -= 1;
         }
         this.allDeskMap.set(deskIndex, deskItem);
     },
-
-    // get current
-    getCurrentDesk: function () {
-        var deskList = [];
-        for (var i = 0; i < this.size; i++) {
-            if (!this.historyDeskKeys.get(i)) {
-                var guessItem = this.allDeskMap.get(i);
-                deskList.push(guessItem);
+    _resetCurrentIndexMap: function (deskIndex) {
+        var delIndex = this.currentSize;
+        for (var i = 0; i < this.currentSize; i++) {
+            var itemDeskIndex = this.currentIndexMap.get(i);
+            if (itemDeskIndex === deskIndex) {
+                delIndex = i;
+                this.currentIndexMap.delete(delIndex);
+            }
+            if (i > delIndex) {
+                this.currentIndexMap.set(i - 1, itemDeskIndex);
             }
         }
-
+    },
+    // get current
+    getCurrentDesk: function (limit, offset) {
+        limit = parseInt(limit);
+        offset = parseInt(offset);
+        if (this.currentSize != 0 && offset > this.currentSize) {
+            throw new Error("offset is not valid");
+        }
+        var number = this.currentSize - offset - limit;
+        var start = this.currentSize - offset;
+        if (number < 0) {
+            number = -1;
+        }
+        var deskList = [];
+        for (var i = start; i > number; i--) {
+            var itemDeskIndex = this.currentIndexMap.get(i);
+            if (itemDeskIndex>-1) {
+                var currentItem = this.allDeskMap.get(itemDeskIndex);
+                deskList.push(currentItem);
+            }
+        }
         return deskList;
     },
 
     // get history
-    getHistory: function (len) {
-        len = parseInt(new BigNumber(len));
+    getHistory: function (limit, offset) {
+        limit = parseInt(limit);
+        offset = parseInt(offset);
+        if (this.historySize != 0 && offset > this.historySize) {
+            throw new Error("offset is not valid");
+        }
+        var number = this.historySize - offset - limit;
+        var start = this.historySize - offset;
+        if (number < 0) {
+            number = -1;
+        }
         var deskList = [];
-        for (var i = 0; i < len; i++) {
-            var index = this.historyIndexMap.get(this.historySize - 1 - i);
-            var deskItem = this.allDeskMap.get(index);
-            if (deskItem) {
-                deskList.push(deskItem);
+        for (var i = start; i > number; i--) {
+            var itemDeskIndex = this.historyIndexMap.get(i);
+            if (itemDeskIndex>-1) {
+                var currentItem = this.allDeskMap.get(itemDeskIndex);
+                deskList.push(currentItem);
             }
         }
-
-        return beRewardGuess;
+        return deskList;
     },
-
     getNickName: function (fromAddress) {
         return this.nickNameMap.get(fromAddress);
     },
@@ -227,9 +263,6 @@ ZJHContract.prototype = {
             throw new Error("this desk play enough");
         }
     },
-    test: function () {
-    },
-
     _isOwner: function (address) {
         if (!(address === this.owner)) {
             throw new Error("Unauthorized operation!");
@@ -243,46 +276,15 @@ ZJHContract.prototype = {
         }
     },
 
-    setOwner: function (address) {
-        this._verifyAddress(address);
-
+    setFee: function (feePercent) {
+        feePercent = new BigNumber(feePercent);
         var from = Blockchain.transaction.from;
         this._isOwner(from);
 
-        this.owner = address;
-    },
-
-    setFee: function (fee) {
-        fee = new BigNumber(fee);
-        var from = Blockchain.transaction.from;
-        this._isOwner(from);
-
-        this.fee = fee;
+        this.feePercent = feePercent;
     },
     getFee: function () {
-        return this.fee;
-    },
-
-    setUnit: function (unit) {
-        unit = new BigNumber(unit);
-        var from = Blockchain.transaction.from;
-        this._isOwner(from);
-
-        this.unit = unit.times(nasToWei);
-    },
-    getUnit: function () {
-        return new BigNumber(this.unit).div(nasToWei);
-    },
-
-    setGuessUnits: function (guessUnits) {
-        guessUnits = new BigNumber(guessUnits)
-        var from = Blockchain.transaction.from;
-        this._isOwner(from);
-
-        this.guessUnits = guessUnits;
-    },
-    getGuessUnits: function () {
-        return this.guessUnits;
+        return this.feePercent;
     },
 
     withdraw: function (address, value) {
