@@ -55,7 +55,7 @@
         <el-col :span="3" v-for="(o, index) in currentDeskFList" :key="index" :offset="1"
                 style="margin-bottom: 10px;margin-right: 10px;margin-top: 20px;">
             <el-card :body-style="{ padding: '0px'}" v-if="o.index!=-1">
-                <img src="img/zjh/desk.jpg" class="image">
+                <img src="img/zjh/desk.png" class="image">
                 <span>{{o.slogan}}</span>
                 <el-row style="margin-bottom: 5px;margin-top: 1px;margin-left: 10px;">
                     <el-col :span="12"><span class="time">no:{{o.index}}</span></el-col>
@@ -90,7 +90,7 @@
         <el-col :span="3" v-for="(o, index) in currentDeskBList" :key="index" :offset="1"
                 style="margin-bottom: 10px;margin-right: 10px;">
             <el-card :body-style="{ padding: '0px'}" v-if="o.index!=-1">
-                <img src="img/zjh/desk.jpg" class="image">
+                <img src="img/zjh/desk.png" class="image">
                 <span style="margin-bottom: 5px;margin-top: 1px;margin-left: 10px;">{{o.slogan}}</span>
                 <el-row style="margin-bottom: 5px;margin-top: 1px;margin-left: 10px;">
                     <el-col :span="12"><span class="time">no:{{o.index}}</span></el-col>
@@ -271,7 +271,7 @@
     }
 
     .body-css {
-        background: url(img/zjh/bj.jpg);
+        background: url(img/zjh/bj.png);
         background-repeat: no-repeat;
         background-attachment: fixed;
         background-size: 100% 100%;
