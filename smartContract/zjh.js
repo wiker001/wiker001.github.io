@@ -1,7 +1,7 @@
 "use strict";
 
 var nasToWei = new BigNumber(10).pow(new BigNumber(18));
-var initPokerList = [["heart", "hide"], ["heart", "hide"], ["heart", "hide"]];
+var initPokerList = [["hearts", "hide"], ["hearts", "hide"], ["hearts", "hide"]];
 
 var PlayItem = function (text) {
     if (text) {
@@ -63,7 +63,7 @@ DeskItem.prototype = {
 var ZJHContract = function () {
     LocalContractStorage.defineProperties(this, {
         owner: null,
-        fee: null,
+        percentFee: null,
         size: null, // 总桌数
         historySize: null, // 已结束桌数
         currentSize: null
@@ -88,8 +88,8 @@ var ZJHContract = function () {
 ZJHContract.prototype = {
     init: function () {
         this.owner = Blockchain.transaction.from;
-        this.feePercent = new BigNumber(0.001); //千分之一旷工费
         this.size = 0;
+        this.percentFee = new BigNumber(0.05);
         this.historySize = 0;
         this.currentSize = 0;
     },
@@ -99,7 +99,7 @@ ZJHContract.prototype = {
         var value = new BigNumber(Blockchain.transaction.value);
         // 下注单位
         var deskUnits = new BigNumber(deskUnits);
-        var deskUnitsWei = deskUnits.times(nasToWei)
+        var deskUnitsWei = deskUnits.times(nasToWei);
         playCount = parseInt(playCount);
         // 创建者 支付金额和 下注单位金额一致
         if (!value.eq(deskUnitsWei)) {
@@ -135,7 +135,7 @@ ZJHContract.prototype = {
         deskIndex = new BigNumber(deskIndex);
         var deskItem = this.allDeskMap.get(deskIndex);
         //交易桌号状态
-        this._validDesk(deskItem);
+        this._validDesk(deskItem, from);
         var deskUnits = new BigNumber(deskItem.deskUnits);
         var deskUnitsWei = deskUnits.times(nasToWei)
         if (!value.eq(deskUnitsWei)) {
@@ -148,6 +148,7 @@ ZJHContract.prototype = {
         playItem.nickName = nickName;
         playItem.createTime = createTime;
         deskItem.playList.push(playItem);
+        var openIndex = -1;
         if (deskItem.playList.length == deskItem.playCount) {
             // 人数满了 发牌 结算
             var playList = deskItem.playList;
@@ -156,10 +157,11 @@ ZJHContract.prototype = {
             //开奖
             var winnerPlay = this._openPoker(playList);
             var winFee = deskUnitsWei.times(deskItem.playCount);
-            var minusFee = new BigNumber(1).minus(new BigNumber(this.feePercent)); // 减去手续费后剩余比例
+            // 千分之一旷工费
+            var minusFee = new BigNumber(1).minus(new BigNumber(this.percentFee));
             winFee = winFee.times(minusFee);
             // 支付奖金
-            var result = Blockchain.transfer(winnerPlay.userAddress,);
+            var result = Blockchain.transfer(winnerPlay.userAddress, winFee);
             if (!result) {
                 throw new Error("transfer failed." + winFee);
             }
@@ -176,7 +178,7 @@ ZJHContract.prototype = {
             this.nickNameMap.set(from, nickName);
             for (var i = 0; i < playList.length; i++) {
                 if (playList[i].userAddress == winnerPlay.userAddress) {
-                    playList[i].winFee = winFee;
+                    playList[i].winFee = winFee.div(nasToWei);
                     playList[i].winStatus = 1;
                 } else {
                     playList[i].winFee = 0;
@@ -186,14 +188,16 @@ ZJHContract.prototype = {
             deskItem.playList = playList;
             this.historySize += 1;
             this.currentSize -= 1;
+            openIndex = deskIndex;
         }
         this.allDeskMap.set(deskIndex, deskItem);
+        return openIndex;
     },
     _resetCurrentIndexMap: function (deskIndex) {
         var delIndex = this.currentSize;
         for (var i = 0; i < this.currentSize; i++) {
             var itemDeskIndex = this.currentIndexMap.get(i);
-            if (itemDeskIndex === deskIndex) {
+            if (itemDeskIndex == deskIndex) {
                 delIndex = i;
                 this.currentIndexMap.delete(delIndex);
             }
@@ -214,15 +218,18 @@ ZJHContract.prototype = {
         if (number < 0) {
             number = -1;
         }
+        var resultData = {};
         var deskList = [];
         for (var i = start; i > number; i--) {
             var itemDeskIndex = this.currentIndexMap.get(i);
-            if (itemDeskIndex>-1) {
+            if (itemDeskIndex > -1) {
                 var currentItem = this.allDeskMap.get(itemDeskIndex);
                 deskList.push(currentItem);
             }
         }
-        return deskList;
+        resultData.data = deskList;
+        resultData.count = this.currentSize;
+        return resultData;
     },
 
     // get history
@@ -237,20 +244,23 @@ ZJHContract.prototype = {
         if (number < 0) {
             number = -1;
         }
+        var resultData = {};
         var deskList = [];
         for (var i = start; i > number; i--) {
             var itemDeskIndex = this.historyIndexMap.get(i);
-            if (itemDeskIndex>-1) {
+            if (itemDeskIndex > -1) {
                 var currentItem = this.allDeskMap.get(itemDeskIndex);
                 deskList.push(currentItem);
             }
         }
-        return deskList;
+        resultData.data = deskList;
+        resultData.count = this.historySize;
+        return resultData;
     },
     getNickName: function (fromAddress) {
         return this.nickNameMap.get(fromAddress);
     },
-    _validDesk: function (deskItem) {
+    _validDesk: function (deskItem, from) {
         if (!deskItem) {
             throw new Error("this desk not exist");
         }
@@ -262,6 +272,24 @@ ZJHContract.prototype = {
         if (playList.length == playCount) {
             throw new Error("this desk play enough");
         }
+        if (playList.length > 0) {
+            for (var i = 0; i < playList.length; i++) {
+                var playItem = playList[i];
+                if (playItem.userAddress === from) {
+                    throw new Error("duplicate join");
+                }
+            }
+        }
+    },
+    setFee: function (percentFee) {
+        percentFee = new BigNumber(percentFee);
+        var from = Blockchain.transaction.from;
+        this._isOwner(from);
+
+        this.percentFee = percentFee;
+    },
+    getFee: function () {
+        return this.percentFee;
     },
     _isOwner: function (address) {
         if (!(address === this.owner)) {
@@ -274,17 +302,6 @@ ZJHContract.prototype = {
         if (!valid) {
             throw new Error("Invalid address!");
         }
-    },
-
-    setFee: function (feePercent) {
-        feePercent = new BigNumber(feePercent);
-        var from = Blockchain.transaction.from;
-        this._isOwner(from);
-
-        this.feePercent = feePercent;
-    },
-    getFee: function () {
-        return this.feePercent;
     },
 
     withdraw: function (address, value) {
@@ -313,7 +330,7 @@ ZJHContract.prototype = {
     _dealPoker: function (playList) {
         //构建牌组
         var pokerColor = ["clubs", "hearts", "spade", "diamonds"]; //花色
-        var pokerNum = ["02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14"];  //点数
+        var pokerNum = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"];  //点数
         var pokerArray = [];
         var k = 0;
         for (var i = 0; i < 4; i++) {
